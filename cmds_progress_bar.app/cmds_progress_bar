@@ -1,0 +1,59 @@
+#!/bin/bash
+
+cdPath="/jobs/transfer/2d_Tools/SamLloyd_Scripts/Applications_Server/__binaries/cocoaDialog.app/Contents/MacOS/cocoaDialog"
+
+rm -f /tmp/_out3
+rm -f /tmp/_out4
+rm -f /tmp/hpipe3
+rm -f /tmp/hpipe4
+mkfifo /tmp/hpipe3
+mkfifo /tmp/hpipe4
+
+sleep 0.2
+
+IFS=$'\007' read -d '' -r -a input_commands < /tmp/cmdslist.txt
+"$cdPath" progressbar --title "Transcodes" --text "Initializing..." --stoppable < /tmp/hpipe3 > /tmp/_out3 &
+exec 3<> /tmp/hpipe3
+echo "0" >&3
+
+sleep 0.5
+
+percentage=0
+pctg=0
+i=0
+cmd_count=${#input_commands[@]}
+echo "0" > /tmp/_out4
+
+for each_command in "${input_commands[@]}"; do eval $each_command 2>> ~/Library/Logs/menagerie_out.log; i=$((i+1)); pctg=$((100*i/cmd_count)); echo $pctg > /tmp/_out4; done &
+
+exec 4<> /tmp/hpipe4
+
+
+while [[ $percentage -lt 100 ]]; do
+		
+	sleep 1
+	dialogStopCheck=$(cat /tmp/_out3)
+	if [[ "$dialogStopCheck" = "stopped" ]]; then
+		exec 3>&-
+		exec 4>&-
+		rm -f /tmp/_out3
+		rm -f /tmp/_out4
+		rm -f /tmp/hpipe3
+		rm -f /tmp/hpipe4
+		exit 0
+		fi
+	percentage=$(cat /tmp/_out4)
+		
+	echo "$percentage $percentage% complete." >&3
+	done
+	
+echo "100 Complete!" >&3
+sleep 1
+
+exec 3>&-
+exec 4>&-
+rm -f /tmp/_out3
+rm -f /tmp/_out4
+rm -f /tmp/hpipe3
+rm -f /tmp/hpipe4
+exit 0
